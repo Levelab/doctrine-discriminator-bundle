@@ -1,0 +1,24 @@
+{
+    "name": "levelab/doctrine-discriminator-bundle",
+    "type": "symfony-bundle",
+    "description": "Symfony-ready Doctrine DiscriminatorMap extension, which allows to move mapping from superclass to subclasses",
+    "keywords": ["symfony2", "doctrine2", "extension", "discriminator", "map"],
+    "homepage": "http://levelab.ru/project/show/2",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Leonid Repin",
+            "email": "leonid-repin@levelab.ru"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.2",
+        "symfony/framework-bundle": ">=2.4",
+        "doctrine/doctrine-bundle": ">=1.3@dev",
+        "doctrine/orm": "~2.3"
+    },
+    "autoload": {
+        "psr-0": { "Levelab\\Doctrine\\DiscriminatorBundle": "" }
+    },
+    "target-dir": "Levelab/Doctrine/DiscriminatorBundle"
+}
