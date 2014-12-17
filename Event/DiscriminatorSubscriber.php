@@ -20,8 +20,8 @@ class DiscriminatorSubscriber implements EventSubscriber
     private $discriminatorMaps = array();
     private $annotations = array();
 
-    const ENTRY_ANNOTATION = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorEntry';
-    const DISCRIMINATOR_PARENT = 'Doctrine\ORM\Mapping\DiscriminatorMap';
+    const ANNOTATION_ENTRY = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorEntry';
+    const ANNOTATION_PARENT = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorParent';
 
     /**
      * Returns an array of events this subscriber wants to listen to.
@@ -65,17 +65,21 @@ class DiscriminatorSubscriber implements EventSubscriber
         //
         $discriminatorMap = array();
         foreach ($this->discriminatorMaps[$class] as $childClass) {
-            $annotation = $this->getAnnotation(new \ReflectionClass($childClass), self::ENTRY_ANNOTATION);
+            $annotation = $this->getAnnotation(new \ReflectionClass($childClass), self::ANNOTATION_ENTRY);
 
             $discriminatorMap[$annotation->getValue()] = $childClass;
         }
 
-        $parentAnnotation = $this->getAnnotation(new \ReflectionClass($class), self::ENTRY_ANNOTATION);
-
         //
         // $discriminatorValue can be null ot not
         //
-        $discriminatorValue = $parentAnnotation->getValue();
+        $parentAnnotation = $this->getAnnotation(new \ReflectionClass($class), self::ANNOTATION_ENTRY);
+        if ($parentAnnotation !== null) {
+            $discriminatorValue = $parentAnnotation->getValue();
+        } else {
+            $discriminatorValue = null;
+        }
+
         if ($discriminatorValue !== null) {
             $discriminatorMap[$discriminatorValue] = $class;
         }
@@ -112,11 +116,7 @@ class DiscriminatorSubscriber implements EventSubscriber
     {
         $reflectionClass = new \ReflectionClass($class);
 
-        if (!$this->getAnnotation($reflectionClass, self::DISCRIMINATOR_PARENT)) {
-            return false;
-        }
-
-        if (!$this->getAnnotation($reflectionClass, self::ENTRY_ANNOTATION)) {
+        if (!$this->getAnnotation($reflectionClass, self::ANNOTATION_PARENT)) {
             return false;
         }
 
@@ -139,7 +139,7 @@ class DiscriminatorSubscriber implements EventSubscriber
             return $this->isDiscriminatorChild($parentClass->getName(), $class);
         }
 
-        if ($this->getAnnotation($reflectionClass, self::ENTRY_ANNOTATION)) {
+        if ($this->getAnnotation($reflectionClass, self::ANNOTATION_ENTRY)) {
             return true;
         }
 
