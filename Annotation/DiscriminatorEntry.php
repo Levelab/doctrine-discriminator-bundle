@@ -12,13 +12,15 @@ namespace Levelab\Doctrine\DiscriminatorBundle\Annotation;
 /**
  * @Annotation
  */
-class DiscriminatorEntry
+final class DiscriminatorEntry
 {
     private $value;
 
     public function __construct(array $data)
     {
-        $this->value = $data['value'];
+        $this->value = isset($data['value'])
+            ? $data['value']
+            : null;
     }
 
     public function getValue()

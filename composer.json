@@ -13,12 +13,13 @@
     ],
     "require": {
         "php": ">=5.3.2",
+
         "symfony/framework-bundle": "~2.3",
+
         "doctrine/doctrine-bundle": "~1.2",
         "doctrine/orm": "~2.2"
     },
     "autoload": {
-        "psr-0": { "Levelab\\Doctrine\\DiscriminatorBundle": "" }
-    },
-    "target-dir": "Levelab/Doctrine/DiscriminatorBundle"
+        "psr-4": { "Levelab\\Doctrine\\DiscriminatorBundle\\": "" }
+    }
 }
