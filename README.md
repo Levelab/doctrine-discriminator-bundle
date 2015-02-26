@@ -5,9 +5,10 @@ Doctrine discriminator map extension bundle, which allows to move mapping from s
 
 Usage
 ========
-* **Import annotation class**
+* **Import annotation classes**
 
 ```php
+use Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorParent
 use Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorEntry
 ```
 
