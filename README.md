@@ -27,6 +27,7 @@ class Child2 extends Parent {}
 
 ```php
 /**
+ * @DiscriminatorParent()
  * @DiscriminatorEntry("self")
  */
 class Parent { }

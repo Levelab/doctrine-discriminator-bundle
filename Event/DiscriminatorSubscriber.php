@@ -17,16 +17,11 @@ use Doctrine\ORM\Events;
 
 class DiscriminatorSubscriber implements EventSubscriber
 {
-    private $map;
+    private $discriminatorMaps = array();
+    private $annotations = array();
 
-    private $cachedMap;
-
-    const ENTRY_ANNOTATION = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorEntry';
-
-    public function __construct()
-    {
-        $this->cachedMap = array();
-    }
+    const ANNOTATION_ENTRY = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorEntry';
+    const ANNOTATION_PARENT = 'Levelab\Doctrine\DiscriminatorBundle\Annotation\DiscriminatorParent';
 
     /**
      * Returns an array of events this subscriber wants to listen to.
@@ -40,115 +35,114 @@ class DiscriminatorSubscriber implements EventSubscriber
 
     public function loadClassMetadata(LoadClassMetadataEventArgs $event)
     {
-        // Reset the temporary calculation map and get the classname
-        $this->map = array();
         $class = $event->getClassMetadata()->name;
         $driver = $event->getEntityManager()->getConfiguration()->getMetadataDriverImpl();
 
-        // Did we already calculate the map for this element?
-        if(array_key_exists($class, $this->cachedMap))
-        {
-            $this->overrideMetadata($event, $class);
+        //
+        // Is it DiscriminatorMap parent class?
+        // DiscriminatorSubscriber::loadClassMetadata processes only parent classes
+        //
+        if (!$this->isDiscriminatorParent($class)) {
             return;
         }
 
-        // Do we have to process this class?
-        if($this->extractEntry($class))
-        {
-            // Now build the whole map
-            $this->checkFamily($class, $driver);
-        }
-        else
-        {
-            // Nothing to do…
-            return;
-        }
+        //
+        // Register our discriminator class
+        //
+        $this->discriminatorMaps[$class] = array();
 
-        // Create the lookup entries
-        $dMap = array_flip($this->map);
-        foreach($this->map as $cName => $discr)
-        {
-            $this->cachedMap[$cName]['map'] = $dMap;
-            $this->cachedMap[$cName]['discr'] = $this->map[$cName];
-        }
-        // Override the data for this class
-        $this->overrideMetadata($event, $class);
-    }
-
-    private function overrideMetadata(LoadClassMetadataEventArgs $event, $class)
-    {
-        // Set the discriminator map and value
-        $event->getClassMetadata()->discriminatorMap = $this->cachedMap[$class]['map'];
-        $event->getClassMetadata()->discriminatorValue = $this->cachedMap[$class]['discr'];
-
-        // If we are the top-most parent, set subclasses!
-        if(isset($this->cachedMap[$class]['isParent']) && $this->cachedMap[$class]['isParent'] === true)
-        {
-            $subclasses = $this->cachedMap[$class]['map'];
-            unset($subclasses[$this->cachedMap[$class]['discr']]);
-
-            $event->getClassMetadata()->subClasses = array_values($subclasses);
-        }
-    }
-
-    private function checkFamily($class, $driver)
-    {
-        $rc = new \ReflectionClass($class);
-        $prc = $rc->getParentClass();
-
-        if($prc !== false)
-        {
-            // Also check all the children of our parent
-            $this->checkFamily($prc->name, $driver);
-        }
-        else
-        {
-            // This is the top-most parent, used in overrideMetadata
-            $this->cachedMap[$class]['isParent'] = true;
-            // Find all the children of this class
-            $this->checkChildren($class, $driver);
-        }
-    }
-
-    private function checkChildren($class, $driver)
-    {
-        foreach($driver->getAllClassNames() as $name)
-        {
-            $cRc = new \ReflectionClass($name);
-            $cRcparent = $cRc->getParentClass();
-
-            if(!$cRcparent)
-                continue;
-
-            // Haven't done this class yet? Go for it.
-            if(!array_key_exists($name, $this->map) && $cRcparent->name == $class && $this->extractEntry($name))
-            {
-                $this->checkChildren($name, $driver);
+        //
+        // And find all subclasses for this parent class
+        //
+        foreach ($driver->getAllClassNames() as $name) {
+            if ($this->isDiscriminatorChild($class, $name)) {
+                $this->discriminatorMaps[$class][] = $name;
             }
         }
+
+        //
+        // Collect $discriminatorMap for ClassMetadata
+        //
+        $discriminatorMap = array();
+        foreach ($this->discriminatorMaps[$class] as $childClass) {
+            $annotation = $this->getAnnotation(new \ReflectionClass($childClass), self::ANNOTATION_ENTRY);
+
+            $discriminatorMap[$annotation->getValue()] = $childClass;
+        }
+
+        //
+        // $discriminatorValue can be null ot not
+        //
+        $parentAnnotation = $this->getAnnotation(new \ReflectionClass($class), self::ANNOTATION_ENTRY);
+        if ($parentAnnotation !== null) {
+            $discriminatorValue = $parentAnnotation->getValue();
+        } else {
+            $discriminatorValue = null;
+        }
+
+        if ($discriminatorValue !== null) {
+            $discriminatorMap[$discriminatorValue] = $class;
+        }
+
+        $event->getClassMetadata()->discriminatorValue = $discriminatorValue;
+        $event->getClassMetadata()->discriminatorMap = $discriminatorMap;
     }
 
-    private function extractEntry($class)
+    /**
+     * @param \ReflectionClass $class
+     * @param $annotationName
+     * @return mixed
+     */
+    private function getAnnotation(\ReflectionClass $class, $annotationName)
     {
-        $rc = new \ReflectionClass($class);
+        if (isset($this->annotations[$class->getName()][$annotationName])) {
+            return $this->annotations[$class->getName()][$annotationName];
+        }
+
         $reader = new AnnotationReader();
 
-        $annotation = $reader->getClassAnnotation($rc, self::ENTRY_ANNOTATION);
-        $success = false;
-
-        if(!is_null($annotation))
-        {
-            $value = $annotation->getValue();
-
-            if(in_array($value, $this->map))
-            {
-                throw new \Exception("Found duplicate discriminator map entry '" . $value . "' in " . $class);
-            }
-
-            $this->map[$class] = $value;
-            $success = true;
+        if ($annotation = $reader->getClassAnnotation($class, $annotationName)) {
+            $this->annotations[$class->getName()][$annotationName] = $annotation;
         }
 
-        return $success;
+        return $annotation;
+    }
+
+    /**
+     * @param string $class
+     * @return bool
+     */
+    private function isDiscriminatorParent($class)
+    {
+        $reflectionClass = new \ReflectionClass($class);
+
+        if (!$this->getAnnotation($reflectionClass, self::ANNOTATION_PARENT)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $parent
+     * @param string $class
+     * @return bool
+     */
+    private function isDiscriminatorChild($parent, $class)
+    {
+        $reflectionClass = new \ReflectionClass($class);
+        $parentClass = $reflectionClass->getParentClass();
+
+        if ($parentClass === false) {
+            return false;
+        } elseif ($parentClass->getName() !== $parent) {
+            return $this->isDiscriminatorChild($parentClass->getName(), $class);
+        }
+
+        if ($this->getAnnotation($reflectionClass, self::ANNOTATION_ENTRY)) {
+            return true;
+        }
+
+        return false;
     }
 }
